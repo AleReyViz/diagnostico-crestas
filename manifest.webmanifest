@@ -1,0 +1,15 @@
+{
+  "name": "Diagnóstico de Crestas SHILICORP",
+  "short_name": "Crestas",
+  "description": "Detección temprana de enfermedades en crestas de gallinas con visión computacional.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f2",
+  "theme_color": "#b3262d",
+  "icons": [
+    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

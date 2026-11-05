@@ -1,0 +1,9 @@
+rules_version = '2';
+// Solo los usuarios con cuenta (veterinario y galponeros creados en Firebase Authentication) leen y escriben.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{coleccion}/{doc} {
+      allow read, write: if request.auth != null && coleccion in ['inspecciones', 'evaluacion'];
+    }
+  }
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Diagnóstico de Crestas SHILICORP</title>
+<meta name="description" content="Detección temprana de enfermedades en crestas de gallinas con visión computacional (YOLO + CNN).">
+<meta name="theme-color" content="#b3262d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="iconos/icono-192.png">
+<link rel="apple-touch-icon" href="iconos/icono-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="row between">
+    <div><div class="eyebrow">SHILICORP SAC · Tesis 2026</div><h1>Diagnóstico de crestas</h1></div>
+    <span class="chip" id="modo">Conectando…</span>
+  </header>
+  <div class="panel" id="carga"><div class="row between small"><span id="carga-txt">Cargando modelos de diagnóstico…</span><span class="mono" id="carga-pct">0 %</span></div><div class="meter"><i id="carga-bar" style="width:0%"></i></div></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="inspeccionar">Inspeccionar</button>
+    <button role="tab" data-tab="alertas">Alertas <span class="badge" id="nalertas" hidden>0</span></button>
+    <button role="tab" data-tab="evaluacion">Evaluación</button>
+    <button role="tab" data-tab="indicadores">Indicadores</button>
+  </nav>
+  <main id="vista"></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js"></script>
+<script src="config.js"></script>
+<script src="motor.js"></script>
+<script src="almacen.js"></script>
+<script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
