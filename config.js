@@ -1,15 +1,9 @@
-/* Configuración de Firebase (opcional).
- * Déjalo en null para usar el MODO LOCAL (los datos quedan solo en cada celular).
- * Para compartir inspecciones y alertas entre el galponero y el veterinario, pega aquí
- * la configuración de tu proyecto de Firebase (ver LEEME.md, paso 3). Ejemplo:
- *
- * window.CONFIG_FIREBASE = {
- *   apiKey: "AIza...",
- *   authDomain: "tu-proyecto.firebaseapp.com",
- *   projectId: "tu-proyecto",
- *   storageBucket: "tu-proyecto.appspot.com",
- *   messagingSenderId: "1234567890",
- *   appId: "1:1234567890:web:abcdef"
- * };
- */
-window.CONFIG_FIREBASE = null;
+/* Configuración de Firebase del aplicativo Diagnóstico de crestas */
+window.CONFIG_FIREBASE = {
+  apiKey: "AIzaSyCfSnFhDxbZxaP-bpurupkdaWv9i1PCl0c",
+  authDomain: "diagnostico-crestas.firebaseapp.com",
+  projectId: "diagnostico-crestas",
+  storageBucket: "diagnostico-crestas.firebasestorage.app",
+  messagingSenderId: "632477607290",
+  appId: "1:632477607290:web:fa2ced7c173031ee76a2c3"
+};
