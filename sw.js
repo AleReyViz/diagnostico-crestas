@@ -1,6 +1,6 @@
 /* Service worker: guarda la app y los modelos en el celular para usarla sin internet en el galpón.
  * Cambia VERSION cada vez que actualices los archivos o los modelos, para que los celulares descarguen la versión nueva. */
-const VERSION = "crestas-v1";
+const VERSION = "crestas-v2";
 const BASE = ["./", "index.html", "estilos.css", "app.js", "motor.js", "almacen.js", "config.js", "manifest.webmanifest",
   "iconos/icono-192.png", "iconos/icono-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js"];
