@@ -197,6 +197,17 @@ td .sub{display:block;font-size:.76rem;color:var(--muted);font-weight:500}
 
 /* ---------- tablet y celular ---------- */
 @media (max-width:1080px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .graficos,.graficos.dos{grid-template-columns:1fr} .graficos>*{min-width:0} .lista-alertas{grid-template-columns:1fr} }
+/* Usuarios */
+.lista-usuarios{padding:0;overflow:hidden}
+.fila-usuario{display:grid;grid-template-columns:44px minmax(0,1.4fr) auto auto;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.fila-usuario:last-child{border-bottom:0}
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:1.05rem}
+.quien{display:flex;flex-direction:column;min-width:0}.quien span{overflow:hidden;text-overflow:ellipsis}
+.etiquetas{display:flex;gap:6px;flex-wrap:wrap}
+.fila-usuario .acciones button{min-height:36px;padding:6px 12px;font-size:.85rem}
+@media (max-width:1080px){ .fila-usuario{grid-template-columns:44px minmax(0,1fr) auto} .fila-usuario .acciones{grid-column:2/-1} }
+@media (max-width:560px){ .fila-usuario{grid-template-columns:40px minmax(0,1fr)} .fila-usuario .etiquetas,.fila-usuario .acciones{grid-column:2/-1} #f-usuario{grid-template-columns:1fr!important} }
+
 @media (max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;align-content:start}
   .lado{display:none}

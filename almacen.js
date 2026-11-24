@@ -4,9 +4,11 @@
  *   Todos los dispositivos comparten las inspecciones y las alertas en tiempo real.
  * - Si no: modo local con IndexedDB. Los datos quedan solo en este dispositivo.
  * Interfaz (window.Almacen):
- *   iniciar() -> {modo: "nube"|"local", usuario, necesitaIngreso}
- *   entrar(correo, clave), salir()
- *   escuchar(coleccion, alCambiar)      alCambiar({id: datos, ...})
+ *   iniciar() -> {modo: "nube"|"local", usuario, uid, necesitaIngreso}
+ *   entrar(correo, clave) -> {correo, uid}, salir()
+ *   perfil(uid) -> {nombre, correo, rol: "veterinario"|"galponero", activo} | null   (colección "usuarios")
+ *   crearUsuario({nombre, correo, clave, rol})   lo usa el veterinario; no cierra su propia sesión
+ *   escuchar(coleccion, alCambiar, filtro?)      alCambiar({id: datos, ...}); filtro = {campo, valor}
  *   guardar(coleccion, id, datos), borrar(coleccion, id)
  *   restablecer(correo)               envía el correo para restablecer la contraseña
  *   subirImagen(blob) -> data URL del recorte (se guarda en el documento)
@@ -58,24 +60,41 @@
       const [app, auth, fs] = await Promise.all([
         import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js")]);
       const a = app.initializeApp(cfg);
-      fb = { auth, fs, A: auth.getAuth(a), F: fs.getFirestore(a) };
+      fb = { appMod: app, auth, fs, A: auth.getAuth(a), F: fs.getFirestore(a) };
       modo = "nube";
       const usuario = await new Promise(ok => { const u = auth.onAuthStateChanged(fb.A, x => { u(); ok(x); }); });
-      return { modo, usuario: usuario ? usuario.email : null, necesitaIngreso: !usuario };
+      return { modo, usuario: usuario ? usuario.email : null, uid: usuario ? usuario.uid : null, necesitaIngreso: !usuario };
     }
     idb = await abrirIDB();
     for (const c of COLECCIONES) cache[c] = await leerTodo(c);
     modo = "local";
-    return { modo, usuario: null, necesitaIngreso: false };
+    return { modo, usuario: null, uid: "local", necesitaIngreso: false };
   }
-  async function entrar(correo, clave) { await fb.auth.signInWithEmailAndPassword(fb.A, correo, clave); return correo; }
+  async function entrar(correo, clave) { const c = await fb.auth.signInWithEmailAndPassword(fb.A, correo, clave); return { correo, uid: c.user.uid }; }
   async function salir() { if (fb) await fb.auth.signOut(fb.A); }
   async function restablecer(correo) { await fb.auth.sendPasswordResetEmail(fb.A, correo); }
 
-  function escuchar(col, alCambiar) {
+  async function perfil(uid) {
+    if (modo !== "nube") return { nombre: "Este dispositivo", rol: "veterinario", activo: true };
+    const { fs, F } = fb;
+    const s = await fs.getDoc(fs.doc(F, "usuarios", uid));
+    return s.exists() ? s.data() : null;
+  }
+  async function crearUsuario({ nombre, correo, clave, rol }) {
+    // Se usa una segunda instancia de Firebase para crear la cuenta sin cerrar la sesión del veterinario.
+    const { appMod, auth, fs, F } = fb;
+    const sec = appMod.getApps().find(a => a.name === "altas") || appMod.initializeApp(window.CONFIG_FIREBASE, "altas");
+    const A2 = auth.getAuth(sec);
+    const cred = await auth.createUserWithEmailAndPassword(A2, correo, clave);
+    await auth.signOut(A2);
+    await fs.setDoc(fs.doc(F, "usuarios", cred.user.uid), { nombre, correo, rol, activo: true, solicitud: false, creado: new Date().toISOString() });
+    return cred.user.uid;
+  }
+  function escuchar(col, alCambiar, filtro) {
     if (modo === "nube") {
       const { fs, F } = fb;
-      return fs.onSnapshot(fs.collection(F, col), snap => {
+      const ref = filtro ? fs.query(fs.collection(F, col), fs.where(filtro.campo, "==", filtro.valor)) : fs.collection(F, col);
+      return fs.onSnapshot(ref, snap => {
         const o = {}; snap.forEach(d => { o[d.id] = d.data(); }); alCambiar(o);
       }, err => console.error("Firestore:", err));
     }
@@ -100,5 +119,5 @@
     const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   }
-  window.Almacen = { iniciar, entrar, salir, restablecer, escuchar, guardar, borrar, subirImagen, descargar, get modo() { return modo; } };
+  window.Almacen = { iniciar, entrar, salir, restablecer, perfil, crearUsuario, escuchar, guardar, borrar, subirImagen, descargar, get modo() { return modo; } };
 })();

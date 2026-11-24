@@ -1,9 +1,27 @@
 rules_version = '2';
-// Solo los usuarios con cuenta (veterinario y galponeros creados en Firebase Authentication) leen y escriben.
+// Reglas del aplicativo Diagnóstico de Crestas SHILICORP.
+// IMPORTANTE: reemplaza CORREO_DE_LA_ADMINISTRADORA por tu correo (el mismo con el que inicias sesión), entre comillas.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{coleccion}/{doc} {
-      allow read, write: if request.auth != null && coleccion in ['inspecciones', 'evaluacion'];
+
+    function logueado()  { return request.auth != null; }
+    function esAdmin()   { return logueado() && request.auth.token.email == "luis.reyna.larc@gmail.com"; }
+    function miPerfil()  { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
+    function activo()    { return logueado() && exists(miPerfil()) && get(miPerfil()).data.activo == true; }
+    function esVet()     { return esAdmin() || (activo() && get(miPerfil()).data.rol == "veterinario"); }
+
+    // Usuarios: cada uno lee su perfil; el veterinario crea, edita y desactiva usuarios.
+    // La administradora puede activar su propia cuenta de veterinario la primera vez.
+    match /usuarios/{uid} {
+      allow read: if logueado() && (request.auth.uid == uid || esVet());
+      allow write: if esVet();
+    }
+
+    // Diagnósticos: el galponero registra y ve solo sus capturas; el veterinario ve todo, revisa y elimina.
+    match /inspecciones/{id} {
+      allow read: if esVet() || (activo() && resource.data.creado_por == request.auth.uid);
+      allow create: if esVet() || (activo() && request.resource.data.creado_por == request.auth.uid);
+      allow update, delete: if esVet();
     }
   }
 }

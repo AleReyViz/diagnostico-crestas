@@ -28,7 +28,18 @@ En computadora el menú va a la izquierda. En el celular va abajo: Diagnósticos
 | **Diagnósticos** | Registro de todas las capturas, con indicadores (total, sanas, sospechosas y enfermas), búsqueda, filtros por estado y periodo, y paginación. Cada registro se puede ver, editar (código, galpón, revisión) o eliminar. |
 | **Capturar** | Para la foto se puede abrir la cámara o subir una imagen. Se muestran los 5 pasos reales del procesamiento: preparación de la imagen, segmentación con YOLO, recorte y medidas de color, redimensionamiento a 224 × 224 y clasificación con la CNN. Después aparecen el resultado y el tiempo de detección. |
 | **Alertas** | Gallinas *Sospechosas* o *Enfermas*. El veterinario confirma la enfermedad, eligiéndola de una lista, o marca *Falsa alarma*. Tiene dos pestañas: Pendientes y Revisadas. |
+| **Usuarios** | Solo para el veterinario: crea los usuarios (nombre, correo, contraseña temporal y rol) y administra sus accesos. |
 | **Estadísticas** | Gráficos de tendencia por día, distribución por estado y comparación por galpón. Incluye las enfermedades confirmadas por el veterinario, la tasa de salud, el tiempo promedio de detección y la opción de exportar el reporte. |
+
+### Roles de usuario
+| Rol | Qué puede hacer |
+|---|---|
+| **Veterinario (administrador)** | Ve todos los diagnósticos del equipo, revisa las alertas y da el diagnóstico final (enfermedad confirmada o falsa alarma), ve las estadísticas, exporta el reporte y **gestiona los usuarios**: los crea, cambia su rol, los desactiva o activa, y les envía el correo para restablecer la contraseña. |
+| **Galponero** | Captura fotos y ve **solo sus capturas**, con la revisión y la indicación del veterinario. No puede editar, eliminar ni revisar. |
+
+Los perfiles se guardan en la colección `usuarios` de Firestore, con los campos nombre, correo, rol y activo. Las reglas de `firestore.rules` hacen cumplir estos permisos en el servidor.
+
+**Primera vez:** en `firestore.rules`, reemplaza `CORREO_DE_LA_ADMINISTRADORA` por tu correo y publica las reglas en Firebase. Luego inicia sesión y toca **Activar cuenta de administradora**. Desde ese momento, los demás usuarios se crean en la pantalla **Usuarios**.
 
 **Estados de la cresta** (probabilidad de enfermedad *p* que da el clasificador):
 
@@ -111,7 +122,7 @@ Desde entonces, el aplicativo pide **correo y contraseña**, y todos los usuario
 ## 6. Actualizar el aplicativo o los modelos
 
 1. Reemplaza los archivos en GitHub. Para un modelo nuevo, reemplaza las carpetas `modelos/yolo` o `modelos/clf`.
-2. En `sw.js`, sube el número de `VERSION` (la versión actual es `"crestas-v4"`; la siguiente será `"crestas-v5"`, y así sucesivamente). Si no lo cambias, los celulares que ya instalaron la app seguirán usando la versión guardada.
+2. En `sw.js`, sube el número de `VERSION` (la versión actual es `"crestas-v5"`; la siguiente será `"crestas-v6"`, y así sucesivamente). Si no lo cambias, los celulares que ya instalaron la app seguirán usando la versión guardada.
 3. Si cambias el clasificador, **vuelve a calibrar el umbral** (`UMBRAL` al inicio de `app.js`) con el conjunto de validación.
 
 ---

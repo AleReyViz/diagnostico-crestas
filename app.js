@@ -1,5 +1,7 @@
 /* Diagnóstico de Crestas · SHILICORP — interfaz del aplicativo
- * Pantallas: Ingreso · Diagnósticos · Capturar · Alertas · Estadísticas · Cuenta
+ * Pantallas: Ingreso · Diagnósticos · Capturar · Alertas · Estadísticas · Usuarios · Cuenta
+ * Roles: veterinario (administrador: ve todo, revisa las alertas y gestiona usuarios)
+ *        galponero (captura fotos y ve sus propias capturas con la respuesta del veterinario)
  * Depende de: motor.js (MotorCrestas), almacen.js (Almacen), Chart.js (gráficos)
  */
 (() => {
@@ -13,10 +15,11 @@ const ENFERMEDADES = ["Bronquitis infecciosa aviar", "Enfermedad de Newcastle", 
 const PASOS = ["Preparación de la imagen", "Segmentación de la cresta (YOLO)", "Recorte y medidas de color", "Redimensionamiento 224 × 224", "Clasificación CNN"];
 
 /* ===================== Estado ===================== */
+const VISTAS = ["diagnosticos", "capturar", "alertas", "estadisticas", "usuarios", "cuenta"];
 const S = {
-  vista: leerHash() || (["diagnosticos", "capturar", "alertas", "estadisticas", "cuenta"].includes(lsGet("vista")) ? lsGet("vista") : "diagnosticos"),
-  ins: {},
-  nube: false, usuario: null, necesitaIngreso: false,
+  vista: leerHash() || lsGet("vista", ""),
+  ins: {}, usuarios: {},
+  nube: false, usuario: null, uid: null, perfil: null, rol: null, errPerfil: false, necesitaIngreso: false, nuevoUsuario: false,
   modelos: "cargando", backend: "", progresoModelos: 0,
   filtro: { texto: "", estado: "todos", periodo: "30", pagina: 1 },
   pestanaAlertas: "pendientes", periodoEst: "30",
@@ -30,7 +33,7 @@ const $ = (q, el = document) => el.querySelector(q);
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function lsGet(k, d) { try { const v = localStorage.getItem("crestas:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } }
 function lsSet(k, v) { try { localStorage.setItem("crestas:" + k, JSON.stringify(v)); } catch {} }
-function leerHash() { const h = (location.hash || "").slice(1); return ["diagnosticos", "capturar", "alertas", "estadisticas", "cuenta"].includes(h) ? h : ""; }
+function leerHash() { const h = (location.hash || "").slice(1); return VISTAS.includes(h) ? h : ""; }
 function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); }
 const seg = ms => ms == null || isNaN(ms) ? "—" : (ms / 1000).toFixed(1).replace(".", ",") + " s";
 const pct = (v, d = 1) => v == null || isNaN(v) ? "—" : v.toFixed(d).replace(".", ",") + " %";
@@ -72,6 +75,7 @@ const IC = {
   reloj: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   cerrar: '<path d="M6 6l12 12M18 6L6 18"/>',
   mas2: '<path d="M12 5v14M5 12h14"/>',
+  grupo: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   persona: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   escudo: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
 };
@@ -82,12 +86,21 @@ const chip = e => `<span class="chip f-${e.cls}">${ic(e.ico)}${e.txt}</span>`;
 const barraProb = p => { const e = estadoDe(p); return `<div class="prob"><div class="barra"><i style="width:${Math.round(p * 100)}%;background:var(--${e.cls === "sosp" ? "sosp" : e.cls === "enf" ? "enf" : "sana"})"></i></div><b>${Math.round(p * 100)}%</b></div>`; };
 
 /* ===================== Estructura ===================== */
-const MENU = [
-  { id: "diagnosticos", txt: "Diagnósticos", ico: "lista" },
-  { id: "capturar", txt: "Capturar", ico: "camara" },
-  { id: "alertas", txt: "Alertas", ico: "campana", cuenta: true },
-  { id: "estadisticas", txt: "Estadísticas", ico: "grafico" }
-];
+const esVet = () => S.rol === "veterinario";
+const ROL_TXT = { veterinario: "Veterinario · administrador", galponero: "Galponero" };
+function menu() {
+  if (esVet()) return [
+    { id: "diagnosticos", txt: "Diagnósticos", ico: "lista" },
+    { id: "capturar", txt: "Capturar", ico: "camara" },
+    { id: "alertas", txt: "Alertas", ico: "campana", cuenta: true },
+    { id: "estadisticas", txt: "Estadísticas", ico: "grafico" },
+    { id: "usuarios", txt: "Usuarios", ico: "grupo" }];
+  return [
+    { id: "capturar", txt: "Capturar", ico: "camara" },
+    { id: "diagnosticos", txt: "Mis capturas", ico: "lista" }];
+}
+const permitidas = () => esVet() ? VISTAS : ["capturar", "diagnosticos", "cuenta"];
+const nombreDe = () => S.perfil?.nombre || S.usuario || "Este dispositivo";
 function estadoModelo() {
   if (S.modelos === "listo") return `<span class="punto ok"></span>Modelos listos (${esc(S.backend)})`;
   if (S.modelos === "error") return `<span class="punto mal"></span>No se cargaron los modelos`;
@@ -101,7 +114,7 @@ function armarApp() {
       <nav class="nav" id="nav"></nav>
       <div class="pie-lado">
         <div class="estado-modelo" id="estado-modelo"></div>
-        <div class="usuario"><span class="muted">${S.nube ? "Usuario" : "Modo local"}</span><b>${esc(S.usuario || "Este dispositivo")}</b></div>
+        <div class="usuario"><span class="muted">${S.nube ? esc(ROL_TXT[S.rol] || "") : "Modo local"}</span><b>${esc(nombreDe())}</b></div>
         ${S.nube ? `<button class="peligro" data-acc="salir">${ic("salir")}Cerrar sesión</button>` : ""}
       </div>
     </aside>
@@ -114,9 +127,9 @@ function armarApp() {
 function pintarNav() {
   const n = Object.values(S.ins).filter(pendiente).length;
   const cuenta = n ? `<span class="cuenta">${n}</span>` : "";
-  $("#nav").innerHTML = MENU.map(m => m.grupo ? `<div class="grupo">${m.grupo}</div>` :
-    `<a data-ir="${m.id}" ${S.vista === m.id ? 'aria-current="page"' : ""}>${ic(m.ico)}${m.txt}${m.cuenta ? cuenta : ""}</a>`).join("");
-  const movil = [MENU[0], MENU[1], MENU[2], MENU[3], { id: "cuenta", txt: "Cuenta", ico: "persona" }];
+  const M = menu();
+  $("#nav").innerHTML = M.map(m => `<a data-ir="${m.id}" ${S.vista === m.id ? 'aria-current="page"' : ""}>${ic(m.ico)}${m.txt}${m.cuenta ? cuenta : ""}</a>`).join("");
+  const movil = [...M.filter(m => m.id !== "usuarios"), { id: "cuenta", txt: "Cuenta", ico: "persona" }];
   $("#abajo").innerHTML = movil.map(m => `<a data-ir="${m.id}" ${S.vista === m.id ? 'aria-current="page"' : ""}>${ic(m.ico)}${m.txt}${m.cuenta ? cuenta : ""}</a>`).join("");
   $("#estado-modelo").innerHTML = estadoModelo();
   const p = $("#punto-sup"); p.className = "punto " + (S.modelos === "listo" ? "ok" : S.modelos === "error" ? "mal" : ""); p.title = S.modelos === "listo" ? "Modelos listos" : "Cargando modelos";
@@ -125,15 +138,17 @@ function pintarNav() {
 /* ===================== Render ===================== */
 function render() {
   if (S.necesitaIngreso) { $("#raiz").innerHTML = vIngreso(); return; }
+  if (!S.perfil || !S.perfil.activo) { $("#raiz").innerHTML = vSinAcceso(); return; }
+  if (!permitidas().includes(S.vista)) { S.vista = esVet() ? "diagnosticos" : "capturar"; history.replaceState(null, "", "#" + S.vista); }
   if (!$("#vista")) armarApp();
   pintarNav();
   S.graficos.forEach(g => g.destroy()); S.graficos = [];
-  const vistas = { diagnosticos: vDiagnosticos, capturar: vCapturar, alertas: vAlertas, estadisticas: vEstadisticas, cuenta: vCuenta };
+  const vistas = { diagnosticos: vDiagnosticos, capturar: vCapturar, alertas: vAlertas, estadisticas: vEstadisticas, usuarios: vUsuarios, cuenta: vCuenta };
   $("#vista").innerHTML = (vistas[S.vista] || vDiagnosticos)();
   if (S.vista === "estadisticas") dibujarGraficos();
   pintarModal();
 }
-function ir(v) { S.vista = v; lsSet("vista", v); history.replaceState(null, "", "#" + v); render(); window.scrollTo(0, 0); }
+function ir(v) { if (!permitidas().includes(v)) v = esVet() ? "diagnosticos" : "capturar"; S.vista = v; lsSet("vista", v); history.replaceState(null, "", "#" + v); render(); window.scrollTo(0, 0); }
 
 /* ---------- Ingreso ---------- */
 function vIngreso() {
@@ -147,6 +162,21 @@ function vIngreso() {
       <button class="primario" type="submit" style="min-height:48px">Iniciar sesión</button>
       <p class="nota-ingreso">${ic("escudo", 'style="width:14px;height:14px;vertical-align:-2px"')} Acceso solo para el personal registrado por la administradora del sistema.</p>
     </form></div></div>`;
+}
+
+/* ---------- Cuenta sin acceso ---------- */
+function vSinAcceso() {
+  const desactivada = S.perfil && !S.perfil.activo;
+  return `<div class="ingreso"><div class="caja-ingreso">
+    <header><div class="logo" style="color:var(--brand)">${LOGO}</div><h1>SHILICORP</h1><p>${esc(S.usuario || "")}</p></header>
+    <div style="padding:22px;display:flex;flex-direction:column;gap:14px">
+      ${desactivada ? `<div class="aviso f-enf">${ic("alerta")}<span>Tu usuario está <b>desactivado</b>. Comunícate con el veterinario para que lo active.</span></div>`
+      : S.errPerfil ? `<div class="aviso f-sosp">${ic("alerta")}<span>No se pudo leer tu perfil. Revisa la conexión o que las reglas de Firestore estén actualizadas.</span></div>`
+      : `<div class="aviso f-info">${ic("persona")}<span>Tu cuenta aún no está registrada como usuario del sistema. El veterinario debe crear tu usuario desde la pantalla <b>Usuarios</b>.</span></div>
+         <p class="muted small">Si eres la administradora del sistema, activa tu cuenta de veterinario la primera vez:</p>
+         <button class="primario" data-acc="activar-admin">${ic("escudo")}Activar cuenta de administradora</button>`}
+      <button data-acc="salir">${ic("salir")}Cerrar sesión</button>
+    </div></div></div>`;
 }
 
 /* ---------- Diagnósticos ---------- */
@@ -175,9 +205,10 @@ function vDiagnosticos() {
   const f = S.filtro;
   const opt = (v, t, sel) => `<option value="${v}" ${sel === v ? "selected" : ""}>${t}</option>`;
   const ubic = x => [x.galpon, x.jaula].filter(Boolean).join(" · ") || "Sin ubicación";
+  const vet = esVet();
   return `
-  <div class="cabecera"><div><h1>Registro de diagnósticos</h1><p>Historial de análisis de crestas de las aves${S.nube ? ", compartido con el equipo" : " de este dispositivo"}.</p></div>
-    <div class="acciones"><button data-acc="exportar">${ic("descargar")}<span class="ocultable">Exportar</span></button><button class="primario" data-ir="capturar">${ic("camara")}Nuevo diagnóstico</button></div></div>
+  <div class="cabecera"><div><h1>${vet ? "Registro de diagnósticos" : "Mis capturas"}</h1><p>${vet ? `Historial de análisis de crestas de las aves${S.nube ? " registrado por todo el equipo" : " de este dispositivo"}.` : "Tus capturas y la revisión del veterinario."}</p></div>
+    <div class="acciones">${vet ? `<button data-acc="exportar">${ic("descargar")}<span class="ocultable">Exportar</span></button>` : ""}<button class="primario" data-ir="capturar">${ic("camara")}Nuevo diagnóstico</button></div></div>
   <div class="kpis">
     ${kpi("Total escaneados", c.total, f.periodo === "todo" ? "Todo el historial" : `Últimos ${f.periodo} días`, "camara", "brand")}
     ${kpi("Sanas", c.sana, c.total ? pct(c.sana / c.total * 100, 0) + " del total" : "", "check", "sana")}
@@ -191,15 +222,15 @@ function vDiagnosticos() {
   </div>
   ${!total ? `<div class="tabla-caja"><div class="vacio">${ic("camara")}<b>No hay diagnósticos ${Object.keys(S.ins).length ? "con estos filtros" : "todavía"}</b><span>Toma la foto de una cresta en <b>Capturar</b> y el resultado aparecerá aquí.</span><button class="primario" data-ir="capturar">${ic("camara")}Nuevo diagnóstico</button></div></div>` : `
   <div class="tabla-caja ocultar-movil"><div class="tabla-scroll"><table>
-    <thead><tr><th>ID gallina</th><th>Cresta</th><th>Estado</th><th>Enfermedad (veterinario)</th><th>Prob. de enfermedad</th><th>Fecha</th><th></th></tr></thead>
+    <thead><tr><th>ID gallina</th><th>Cresta</th><th>Estado</th><th>Revisión del veterinario</th><th>Prob. de enfermedad</th><th>Fecha</th><th></th></tr></thead>
     <tbody>${vista.map(([id, x]) => `<tr data-ver="${id}">
       <td class="cod">${esc(x.codigo || "Sin código")}<span class="sub">${esc(ubic(x))}</span></td>
       <td><img class="mini" src="${esc(x.recorte_url || "")}" alt="Cresta ${esc(x.codigo || "")}" loading="lazy"></td>
       <td>${chip(estadoDe(x.prob))}</td>
       <td>${pendiente(x) ? `<span class="t-sosp" style="font-weight:600">Pendiente de revisión</span>` : esc(enfermedadDe(x))}</td>
       <td>${barraProb(x.prob)}</td>
-      <td class="num small">${fecha(x.t_fin)}</td>
-      <td style="white-space:nowrap"><button class="icono-btn" data-ver="${id}" aria-label="Ver y editar">${ic("lapiz")}</button><button class="icono-btn" data-borrar="${id}" aria-label="Eliminar" style="color:var(--enf)">${ic("basura")}</button></td>
+      <td class="num small">${fecha(x.t_fin)}${vet && x.creado_por_nombre ? `<span class="sub">por ${esc(x.creado_por_nombre)}</span>` : ""}</td>
+      <td style="white-space:nowrap">${vet ? `<button class="icono-btn" data-ver="${id}" aria-label="Ver y revisar">${ic("lapiz")}</button><button class="icono-btn" data-borrar="${id}" aria-label="Eliminar" style="color:var(--enf)">${ic("basura")}</button>` : `<button class="icono-btn" data-ver="${id}" aria-label="Ver detalle">${ic("ojo")}</button>`}</td>
     </tr>`).join("")}</tbody></table></div>
     ${paginacion(total, paginas)}</div>
   <div class="cartas">${vista.map(([id, x]) => { const e = estadoDe(x.prob); return `<button class="carta" data-ver="${id}">
@@ -231,7 +262,8 @@ function pintarModal() {
       <div>Fecha<b class="num">${fecha(x.t_fin)}</b></div><div>Tiempo de detección<b class="num">${seg(x.ms_total)}</b></div>
       <div>Análisis de los modelos<b class="num">${seg(x.ms_modelos)}</b></div><div>Confianza de YOLO<b class="num">${pct((x.conf_yolo || 0) * 100, 0)}</b></div>
     </div>
-    <hr class="separador"><h3>Datos de la gallina</h3>
+    ${!esVet() ? detalleGalponero(x) : `<hr class="separador"><h3>Datos de la gallina</h3>
+    ${x.creado_por_nombre ? `<p class="small muted">Capturado por <b>${esc(x.creado_por_nombre)}</b></p>` : ""}
     <div class="formulario" style="grid-template-columns:repeat(3,minmax(0,1fr))">
       <label class="campo">ID gallina<input type="text" id="d-codigo" class="mono" value="${esc(x.codigo)}" autocapitalize="characters"></label>
       <label class="campo">Galpón<input type="text" id="d-galpon" value="${esc(x.galpon)}"></label>
@@ -245,8 +277,17 @@ function pintarModal() {
     <div class="acciones"><button class="primario" data-acc="guardar-detalle" style="flex:1">Guardar cambios</button></div>
     <hr class="separador">
     ${S.confirmarBorrar ? `<div class="aviso f-enf">${ic("alerta")}<span>¿Eliminar este diagnóstico? No se puede deshacer.</span></div><div class="acciones"><button class="peligro" data-acc="borrar-si" style="flex:1">Sí, eliminar</button><button data-acc="borrar-no" style="flex:1">Cancelar</button></div>`
-      : `<button class="peligro" data-acc="borrar">${ic("basura")}Eliminar diagnóstico</button>`}
+      : `<button class="peligro" data-acc="borrar">${ic("basura")}Eliminar diagnóstico</button>`}`}
   </div></div>`;
+}
+function detalleGalponero(x) {
+  const r = x.revision;
+  return `<div class="datos" style="margin:0"><div>ID gallina<b>${esc(x.codigo || "Sin código")}</b></div><div>Ubicación<b>${esc([x.galpon, x.jaula].filter(Boolean).join(" · ") || "—")}</b></div></div>
+    <hr class="separador"><h3>Revisión del veterinario</h3>
+    ${r ? `<div class="aviso f-${r.veterinario === "enferma" ? "enf" : "sana"}">${ic(r.veterinario === "enferma" ? "pulso" : "check")}<span><b>${r.veterinario === "enferma" ? esc(r.enfermedad || "Enfermedad confirmada") : "Sin enfermedad: falsa alarma"}</b>${r.por ? ` · ${esc(r.por)}` : ""} · ${fecha(r.t)}</span></div>
+      ${r.nota ? `<div class="tarjeta" style="box-shadow:none"><span class="muted small">Indicación del veterinario</span><p style="margin-top:4px">${esc(r.nota)}</p></div>` : ""}`
+    : esAlerta(x) ? `<div class="aviso f-sosp">${ic("reloj")}<span><b>Pendiente de revisión.</b> Mantén a la gallina separada hasta que el veterinario la evalúe.</span></div>`
+    : `<div class="aviso f-sana">${ic("check")}<span>Sin alerta: no se detectaron signos en la cresta.</span></div>`}`;
 }
 async function guardarDetalle() {
   const x = structuredClone(S.ins[S.modal]); if (!x) return;
@@ -255,7 +296,7 @@ async function guardarDetalle() {
   const nota = $("#d-nota").value.trim(), enf = $("#d-enf")?.value || "";
   if (vet) {
     const decision = esAlerta(x) ? (vet === "enferma" ? "confirmada" : "falsa_alarma") : (vet === "enferma" ? "no_detectada" : "correcta");
-    x.revision = { veterinario: vet, enfermedad: vet === "enferma" ? enf : "", nota, decision, t: x.revision?.t && x.revision.veterinario === vet && x.revision.enfermedad === enf ? x.revision.t : new Date().toISOString() };
+    x.revision = { veterinario: vet, enfermedad: vet === "enferma" ? enf : "", nota, decision, por: nombreDe(), por_uid: S.uid, t: x.revision?.t && x.revision.veterinario === vet && x.revision.enfermedad === enf ? x.revision.t : new Date().toISOString() };
     x.estado = esAlerta(x) ? "revisada" : "no_aplica";
   }
   try { await guardar("inspecciones", S.modal, x); toast("Cambios guardados"); S.modal = null; S.modal_vet = undefined; render(); }
@@ -327,7 +368,7 @@ async function procesarFoto(origen, file) {
       prob: +r.prob.toFixed(4), resultado: r.prob >= UMBRAL ? "enferma" : "sana", confianza_baja: r.prob >= UMBRAL && r.prob < ALTA,
       umbral: UMBRAL, conf_yolo: +r.confYolo.toFixed(3), color: r.color.map(v => +v.toFixed(2)),
       t_inicio: new Date(ahora - ms_total).toISOString(), t_fin: ahora.toISOString(), ms_total: Math.round(ms_total), ms_modelos: Math.round(r.ms_modelos),
-      estado: r.prob >= UMBRAL ? "pendiente" : "no_aplica", recorte_url };
+      estado: r.prob >= UMBRAL ? "pendiente" : "no_aplica", recorte_url, creado_por: S.uid, creado_por_nombre: nombreDe() };
     const id = "i" + ahora.getTime();
     await guardar("inspecciones", id, doc);
     S.cap = { fase: "resultado", paso: PASOS.length, doc: { ...doc, _id: id }, error: "" };
@@ -343,7 +384,7 @@ async function subirRecorte(canvas) {
   return await Almacen.subirImagen(blob);
 }
 async function guardar(col, id, datos) {
-  S.ins[id] = datos;
+  if (col === "inspecciones") S.ins[id] = datos;
   await Almacen.guardar(col, id, datos);
 }
 
@@ -357,6 +398,7 @@ function vAlertas() {
     return `<div class="tarjeta alerta" style="${!r ? `border-left:4px solid var(--${e.cls})` : ""}"><img src="${esc(x.recorte_url)}" alt="Cresta en alerta">
       <div class="cuerpo"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">${chip(e)}<span class="small muted num">${fecha(x.t_fin)}</span></div>
         <b>${esc(x.codigo || "Sin código")} <span class="muted small" style="font-weight:500">· ${esc([x.galpon, x.jaula].filter(Boolean).join(" · ") || "Sin ubicación")}</span></b>
+        ${x.creado_por_nombre ? `<span class="small muted">Capturado por ${esc(x.creado_por_nombre)}</span>` : ""}
         ${barraProb(x.prob)}
         ${r ? `<span class="small"><b class="${r.veterinario === "enferma" ? "t-enf" : "t-sana"}">${r.veterinario === "enferma" ? esc(r.enfermedad || "Enfermedad confirmada") : "Falsa alarma"}</b>${r.nota ? ` · ${esc(r.nota)}` : ""}</span>`
           : `<div class="acciones"><button class="primario" data-ver="${id}" data-vet-ini="enferma" style="flex:1">Confirmar enfermedad</button><button data-falsa="${id}" style="flex:1">Falsa alarma</button></div>`}
@@ -369,7 +411,7 @@ function vAlertas() {
 }
 async function falsaAlarma(id) {
   const x = structuredClone(S.ins[id]); if (!x) return;
-  x.revision = { veterinario: "sana", enfermedad: "", nota: "", decision: "falsa_alarma", t: new Date().toISOString() }; x.estado = "revisada";
+  x.revision = { veterinario: "sana", enfermedad: "", nota: "", decision: "falsa_alarma", por: nombreDe(), por_uid: S.uid, t: new Date().toISOString() }; x.estado = "revisada";
   try { await guardar("inspecciones", id, x); toast("Marcada como falsa alarma"); render(); } catch { toast("No se pudo guardar."); }
 }
 
@@ -435,13 +477,61 @@ function dibujarGraficos() {
       data: galpones.map(g => xs.filter(x => (x.galpon || "Sin galpón") === g && estadoDe(x.prob).clave === k).length) })) } }));
 }
 
+/* ---------- Usuarios (solo veterinario) ---------- */
+function vUsuarios() {
+  if (!S.nube) return `<div class="cabecera"><div><h1>Usuarios</h1></div></div><div class="aviso f-info">${ic("persona")}<span>La gestión de usuarios necesita Firebase. En modo local el aplicativo lo usa una sola persona.</span></div>`;
+  const lista = Object.entries(S.usuarios).sort((a, b) => (a[1].rol === b[1].rol ? 0 : a[1].rol === "veterinario" ? -1 : 1) || (a[1].nombre || "").localeCompare(b[1].nombre || ""));
+  const activos = lista.filter(([, u]) => u.activo);
+  const fila = ([uid, u]) => { const yo = uid === S.uid;
+    return `<div class="fila-usuario">
+      <div class="avatar f-${u.rol === "veterinario" ? "brand" : "sosp"}">${esc((u.nombre || u.correo || "?").trim().charAt(0).toUpperCase())}</div>
+      <div class="quien"><b>${esc(u.nombre || "Sin nombre")}${yo ? ' <span class="muted small">(tú)</span>' : ""}</b><span class="small muted">${esc(u.correo || "")}</span></div>
+      <div class="etiquetas"><span class="chip f-${u.rol === "veterinario" ? "brand" : "sosp"}">${u.rol === "veterinario" ? "Veterinario" : "Galponero"}</span>${u.activo ? `<span class="chip f-sana">Activo</span>` : `<span class="chip f-enf">Desactivado</span>`}</div>
+      <div class="acciones">${yo ? "" : `
+        <button data-rol="${uid}">${u.rol === "veterinario" ? "Cambiar a galponero" : "Cambiar a veterinario"}</button>
+        <button data-clave="${esc(u.correo || "")}">Restablecer contraseña</button>
+        <button class="${u.activo ? "peligro" : "primario"}" data-activo="${uid}">${u.activo ? "Desactivar" : "Activar"}</button>`}</div>
+    </div>`; };
+  return `
+  <div class="cabecera"><div><h1>Usuarios</h1><p>Personal que usa el aplicativo. El veterinario administra los accesos.</p></div>
+    <div class="acciones"><button class="primario" data-acc="nuevo-usuario">${ic("mas2")}Nuevo usuario</button></div></div>
+  <div class="kpis">
+    ${kpi("Usuarios activos", activos.length, `${lista.length} registrados`, "grupo", "brand")}
+    ${kpi("Veterinarios", activos.filter(([, u]) => u.rol === "veterinario").length, "Revisan las alertas", "escudo", "brand")}
+    ${kpi("Galponeros", activos.filter(([, u]) => u.rol === "galponero").length, "Capturan las fotos", "camara", "sosp")}
+    ${kpi("Desactivados", lista.length - activos.length, "Sin acceso", "alerta", "enf")}
+  </div>
+  ${S.nuevoUsuario ? `<div class="tarjeta"><h3>Nuevo usuario</h3><p class="muted small">Entrega al usuario su correo y la contraseña temporal. Podrá cambiarla con «¿Olvidaste tu contraseña?».</p>
+    <form id="f-usuario" class="formulario" style="margin-top:12px;grid-template-columns:repeat(2,minmax(0,1fr))" novalidate>
+      <label class="campo">Nombre completo<input type="text" id="n-nombre" placeholder="Juan Pérez" required></label>
+      <label class="campo">Rol<select id="n-rol"><option value="galponero">Galponero (captura fotos)</option><option value="veterinario">Veterinario (administrador)</option></select></label>
+      <label class="campo">Correo electrónico<input type="email" id="n-correo" placeholder="juan@correo.com" required></label>
+      <label class="campo">Contraseña temporal<input type="text" id="n-clave" placeholder="Mínimo 6 caracteres" minlength="6" required></label>
+      <div class="acciones" style="grid-column:1/-1"><button class="primario" type="submit">${ic("mas2")}Crear usuario</button><button type="button" data-acc="cancelar-usuario">Cancelar</button></div>
+    </form></div>` : ""}
+  <div class="tarjeta lista-usuarios">${lista.length ? lista.map(fila).join("") : `<div class="vacio">${ic("grupo")}<b>Aún no hay usuarios</b></div>`}</div>`;
+}
+async function crearUsuario(f) {
+  const nombre = $("#n-nombre").value.trim(), correo = $("#n-correo").value.trim().toLowerCase(), clave = $("#n-clave").value, rol = $("#n-rol").value;
+  if (!nombre || !/^\S+@\S+\.\S+$/.test(correo)) return toast("Completa el nombre y un correo válido.");
+  if (clave.length < 6) return toast("La contraseña debe tener al menos 6 caracteres.");
+  const btn = f.querySelector("button[type=submit]"); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Creando…';
+  try { await Almacen.crearUsuario({ nombre, correo, clave, rol }); S.nuevoUsuario = false; toast(`Usuario creado: ${nombre}`); render(); }
+  catch (e) { console.error(e); btn.disabled = false; btn.innerHTML = ic("mas2") + "Crear usuario";
+    toast(e.code === "auth/email-already-in-use" ? "Ese correo ya tiene una cuenta." : e.code === "auth/weak-password" ? "La contraseña es muy débil." : e.code === "auth/invalid-email" ? "El correo no es válido." : "No se pudo crear el usuario."); }
+}
+async function cambiarUsuario(uid, cambios, msj) {
+  const u = { ...S.usuarios[uid], ...cambios };
+  try { await Almacen.guardar("usuarios", uid, u); toast(msj); } catch { toast("No se pudo guardar el cambio."); }
+}
+
 /* ---------- Cuenta (celular) ---------- */
 function vCuenta() {
   return `<div class="cabecera"><div><h1>Cuenta</h1><p>Estado del aplicativo y sesión.</p></div></div>
   <div class="tarjeta" style="display:flex;flex-direction:column;gap:10px">
     <div class="estado-modelo" style="padding:0">${estadoModelo()}</div>
-    <div class="usuario"><span class="muted">${S.nube ? "Sesión iniciada como" : "Modo local"}</span><b>${esc(S.usuario || "Este dispositivo")}</b></div>
-    <button data-acc="exportar">${ic("descargar")}Exportar diagnósticos (CSV)</button>
+    <div class="usuario"><span class="muted">${S.nube ? esc(ROL_TXT[S.rol] || "") : "Modo local"}</span><b>${esc(nombreDe())}</b>${S.nube ? `<span class="small muted">${esc(S.usuario || "")}</span>` : ""}</div>
+    ${esVet() ? `<button data-ir="usuarios">${ic("grupo")}Usuarios</button><button data-acc="exportar">${ic("descargar")}Exportar diagnósticos (CSV)</button>` : ""}
     ${S.nube ? `<button class="peligro" data-acc="salir">${ic("salir")}Cerrar sesión</button>` : ""}</div>`;
 }
 
@@ -449,11 +539,11 @@ function vCuenta() {
 function csvCelda(v) { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 function exportar() {
   const filas = [["id_gallina", "galpon", "jaula", "fecha_hora", "estado", "probabilidad_enfermedad", "tiempo_deteccion_s", "tiempo_analisis_s",
-    "confianza_yolo", "revision_veterinario", "enfermedad", "decision", "nota", "fecha_revision", "umbral"]];
+    "confianza_yolo", "registrado_por", "revision_veterinario", "revisado_por", "enfermedad", "decision", "nota", "fecha_revision", "umbral"]];
   for (const x of Object.values(S.ins).sort((a, b) => a.t_fin.localeCompare(b.t_fin))) {
     const r = x.revision || {};
     filas.push([x.codigo, x.galpon, x.jaula, x.t_fin, estadoDe(x.prob).txt, x.prob, (x.ms_total / 1000).toFixed(2), (x.ms_modelos / 1000).toFixed(2),
-      x.conf_yolo ?? "", r.veterinario || "", r.enfermedad || "", r.decision || (pendiente(x) ? "pendiente" : ""), r.nota || "", r.t || "", x.umbral]);
+      x.conf_yolo ?? "", x.creado_por_nombre || "", r.veterinario || "", r.por || "", r.enfermedad || "", r.decision || (pendiente(x) ? "pendiente" : ""), r.nota || "", r.t || "", x.umbral]);
   }
   try { Almacen.descargar(`diagnosticos_crestas_${new Date().toISOString().slice(0, 10)}.csv`, "﻿" + filas.map(r => r.map(csvCelda).join(",")).join("\r\n")); toast("Reporte exportado"); }
   catch { toast("No se pudo exportar."); }
@@ -461,7 +551,7 @@ function exportar() {
 
 /* ===================== Eventos (delegados) ===================== */
 document.addEventListener("click", async ev => {
-  const el = ev.target.closest("[data-ir],[data-acc],[data-ver],[data-borrar],[data-pag],[data-pest],[data-falsa],[data-vet],input[data-foto]");
+  const el = ev.target.closest("[data-ir],[data-acc],[data-ver],[data-borrar],[data-pag],[data-pest],[data-falsa],[data-vet],[data-rol],[data-clave],[data-activo],input[data-foto]");
   if (!el) return;
   if (el.matches("input[data-foto]")) { tInicio[el.dataset.foto] = performance.now(); return; }
   if (el.dataset.acc === "cerrar-modal" && el.classList.contains("fondo-modal") && ev.target !== el) return;
@@ -472,6 +562,9 @@ document.addEventListener("click", async ev => {
   if (d.pag) { S.filtro.pagina = +d.pag; return render(); }
   if (d.pest) { S.pestanaAlertas = d.pest; return render(); }
   if (d.falsa) return falsaAlarma(d.falsa);
+  if (d.rol) { const u = S.usuarios[d.rol], nuevo = u.rol === "veterinario" ? "galponero" : "veterinario"; return cambiarUsuario(d.rol, { rol: nuevo }, `${u.nombre} ahora es ${nuevo}.`); }
+  if (d.activo) { const u = S.usuarios[d.activo]; return cambiarUsuario(d.activo, { activo: !u.activo }, u.activo ? `${u.nombre} fue desactivado.` : `${u.nombre} fue activado.`); }
+  if (d.clave !== undefined && el.matches("[data-clave]")) { try { await Almacen.restablecer(d.clave); toast(`Se envió el correo para restablecer la contraseña a ${d.clave}.`); } catch { toast("No se pudo enviar el correo."); } return; }
   if (d.vet) { S.modal_vet = d.vet; const y = $(".modal")?.scrollTop; pintarModal(); if ($(".modal")) $(".modal").scrollTop = y; return; }
   switch (d.acc) {
     case "cerrar-modal": S.modal = null; S.modal_vet = undefined; S.confirmarBorrar = false; return pintarModal();
@@ -480,7 +573,13 @@ document.addEventListener("click", async ev => {
     case "borrar-no": S.confirmarBorrar = false; return pintarModal();
     case "borrar-si": { const id = S.modal; try { await Almacen.borrar("inspecciones", id); delete S.ins[id]; toast("Diagnóstico eliminado"); } catch { toast("No se pudo eliminar."); }
       S.modal = null; S.confirmarBorrar = false; return render(); }
-    case "exportar": return exportar();
+    case "exportar": return esVet() && exportar();
+    case "nuevo-usuario": S.nuevoUsuario = true; render(); return $("#n-nombre")?.focus();
+    case "cancelar-usuario": S.nuevoUsuario = false; return render();
+    case "activar-admin": {
+      try { await Almacen.guardar("usuarios", S.uid, { nombre: S.usuario.split("@")[0], correo: S.usuario, rol: "veterinario", activo: true, solicitud: false, creado: new Date().toISOString() });
+        await cargarPerfil(); $("#raiz").innerHTML = ""; conectar(); render(); cargarModelos(); toast("Cuenta de administradora activada"); }
+      catch (e) { console.error(e); toast("Esta cuenta no es la administradora. Pide al veterinario que cree tu usuario."); } return; }
     case "nueva-captura": S.cap = { fase: "listo", paso: -1, doc: null }; render(); return window.scrollTo(0, 0);
     case "ver-ultimo": if (S.cap.doc) { S.modal = S.cap.doc._id; S.modal_vet = undefined; pintarModal(); } return;
     case "salir": try { await Almacen.salir(); } catch {} return location.reload();
@@ -503,41 +602,50 @@ document.addEventListener("input", ev => {
   if (el.id === "u-jaula") { S.ubic.jaula = el.value; lsSet("ubic", S.ubic); }
 });
 document.addEventListener("submit", async ev => {
+  if (ev.target.id === "f-usuario") { ev.preventDefault(); return crearUsuario(ev.target); }
   if (ev.target.id !== "f-ingreso") return; ev.preventDefault();
   const btn = ev.target.querySelector("button[type=submit]"); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Ingresando…';
-  try { S.usuario = await Almacen.entrar($("#i-correo").value.trim(), $("#i-clave").value); S.necesitaIngreso = false; $("#raiz").innerHTML = ""; conectar(); render(); }
+  try { const r = await Almacen.entrar($("#i-correo").value.trim(), $("#i-clave").value); S.usuario = r.correo; S.uid = r.uid; S.necesitaIngreso = false;
+    await cargarPerfil(); $("#raiz").innerHTML = ""; S.vista = ""; if (S.perfil?.activo) conectar(); render(); if (S.perfil?.activo) cargarModelos(); }
   catch { btn.disabled = false; btn.textContent = "Iniciar sesión"; toast("Correo o contraseña incorrectos."); }
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && S.modal) { S.modal = null; pintarModal(); } });
 window.addEventListener("hashchange", () => { const v = leerHash(); if (v && v !== S.vista) ir(v); });
 
 /* ===================== Inicio ===================== */
-let conectado = false;
+let conectado = false, modelosIniciados = false;
 function conectar() {
   if (conectado) return; conectado = true;
-  const escuchar = (col, clave) => Almacen.escuchar(col, o => {
+  const escuchar = (col, clave, filtro) => Almacen.escuchar(col, o => {
     S[clave] = structuredClone(o);
     const foco = document.activeElement;
     if (S.cap.fase === "procesando" || (foco && /INPUT|TEXTAREA|SELECT/.test(foco.tagName) && foco.type !== "file") || S.modal) { if (!S.modal) pintarNav(); return; }
     const y = window.scrollY; render(); window.scrollTo(0, y);
-  });
-  escuchar("inspecciones", "ins");
+  }, filtro || undefined);
+  escuchar("inspecciones", "ins", esVet() || !S.nube ? null : { campo: "creado_por", valor: S.uid });
+  if (esVet() && S.nube) escuchar("usuarios", "usuarios");
+}
+async function cargarPerfil() {
+  S.errPerfil = false;
+  try { S.perfil = await Almacen.perfil(S.uid); } catch (e) { console.error(e); S.perfil = null; S.errPerfil = true; }
+  S.rol = S.perfil?.rol || null;
 }
 async function cargarModelos() {
+  if (modelosIniciados) return; modelosIniciados = true;
   if (!window.tf || !window.MotorCrestas) { S.modelos = "error"; return; }
   try {
     S.backend = await MotorCrestas.cargar("modelos/", p => { S.progresoModelos = p; if ($("#estado-modelo")) $("#estado-modelo").innerHTML = estadoModelo(); });
     S.modelos = "listo";
   } catch (e) { console.error(e); S.modelos = "error"; }
-  if (!S.necesitaIngreso) { if (S.vista === "capturar" || S.vista === "cuenta") render(); else pintarNav(); }
+  if (!S.necesitaIngreso && S.perfil?.activo) { if (S.vista === "capturar" || S.vista === "cuenta") render(); else pintarNav(); }
 }
 (async () => {
   try {
     const r = await Almacen.iniciar();
-    S.nube = r.modo === "nube"; S.usuario = r.usuario; S.necesitaIngreso = r.necesitaIngreso;
+    S.nube = r.modo === "nube"; S.usuario = r.usuario; S.uid = r.uid; S.necesitaIngreso = r.necesitaIngreso;
+    if (!S.necesitaIngreso) await cargarPerfil();
   } catch (e) { console.error(e); toast("No se pudo conectar con el almacenamiento."); }
   render();
-  if (!S.necesitaIngreso) conectar();
-  cargarModelos();
+  if (!S.necesitaIngreso && S.perfil?.activo) { conectar(); cargarModelos(); }
 })();
 })();
