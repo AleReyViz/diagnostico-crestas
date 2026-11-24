@@ -124,7 +124,10 @@
   function aLienzo(img) { const c = lienzo(img.w, img.h); c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(img.d), img.w, img.h), 0, 0); return c; }
 
   /* ---- Diagnóstico de una imagen (ImageBitmap o HTMLImageElement) ---- */
-  async function diagnosticar(fuente) {
+  const respirar = () => new Promise(r => setTimeout(r, 0));   // deja que la pantalla muestre el avance
+  async function diagnosticar(fuente, alPaso) {
+    const paso = async (i) => { if (alPaso) { alPaso(i); await respirar(); } };
+    await paso(0);   // 0: preparación de la imagen
     const tf = global.tf; if (!yolo || !clf) throw new Error("Modelos no cargados");
     const W0 = fuente.width, H0 = fuente.height;
     // imagen de trabajo (para recortar)
@@ -138,6 +141,7 @@
     cx.fillStyle = "rgb(114,114,114)"; cx.fillRect(0, 0, LADO, LADO);
     cx.imageSmoothingQuality = "high"; cx.drawImage(fuente, px, py, nw, nh);
 
+    await paso(1);   // 1: segmentación de la cresta (YOLO)
     const t0 = performance.now();
     const res = tf.tidy(() => {
       const ent = tf.browser.fromPixels(lb).toFloat().div(255).expandDims(0);
@@ -163,6 +167,7 @@
     const t_yolo = performance.now() - t0;
     if (!res.mascara) return { encontrada: false, confYolo: res.conf || 0, ms_modelos: t_yolo };
 
+    await paso(2);   // 2: recorte y medidas de color
     // Recorte como el notebook: contorno de la máscara (masks.xy) llevado a la foto original y relleno.
     // Un píxel de la foto (X, Y) queda dentro si la máscara, interpolada en (X·r + px, Y·r + py), vale al menos 0,5.
     const M = res.mascara; let x0 = LADO, y0 = LADO, x1 = -1, y1 = -1;
@@ -199,9 +204,11 @@
       const a = (y * chicoImg.w + x) * 4, b = ((y + oy) * lado + x + ox) * 4;
       cuadImg.d[b] = chicoImg.d[a]; cuadImg.d[b + 1] = chicoImg.d[a + 1]; cuadImg.d[b + 2] = chicoImg.d[a + 2];
     }
+    await paso(3);   // 3: redimensionamiento a 224 x 224
     const img224 = resamplePIL(cuadImg, TAM, TAM, "bilinear", [0, 0, lado, lado]);   // L.resize((224,224), BILINEAR)
     const c224 = aLienzo(img224), chico = aLienzo(chicoImg);
 
+    await paso(4);   // 4: clasificación CNN
     const t1 = performance.now();
     const rgb = new Float32Array(TAM * TAM * 3);
     for (let p = 0, q = 0; p < img224.d.length; p += 4) { rgb[q++] = img224.d[p]; rgb[q++] = img224.d[p + 1]; rgb[q++] = img224.d[p + 2]; }

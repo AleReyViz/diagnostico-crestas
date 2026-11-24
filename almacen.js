@@ -7,7 +7,8 @@
  *   iniciar() -> {modo: "nube"|"local", usuario, necesitaIngreso}
  *   entrar(correo, clave), salir()
  *   escuchar(coleccion, alCambiar)      alCambiar({id: datos, ...})
- *   guardar(coleccion, id, datos)
+ *   guardar(coleccion, id, datos), borrar(coleccion, id)
+ *   restablecer(correo)               envía el correo para restablecer la contraseña
  *   subirImagen(blob) -> data URL del recorte (se guarda en el documento)
  *   descargar(nombreArchivo, texto)
  */
@@ -33,6 +34,12 @@
       const cur = t.openCursor();
       cur.onsuccess = () => { const c = cur.result; if (c) { out[c.key] = c.value; c.continue(); } else ok(out); };
       cur.onerror = () => mal(cur.error);
+    });
+  }
+  function borrarIDB(col, id) {
+    return new Promise((ok, mal) => {
+      const tx = idb.transaction(col, "readwrite"); tx.objectStore(col).delete(id);
+      tx.oncomplete = ok; tx.onerror = () => mal(tx.error);
     });
   }
   function escribirIDB(col, id, datos) {
@@ -63,6 +70,7 @@
   }
   async function entrar(correo, clave) { await fb.auth.signInWithEmailAndPassword(fb.A, correo, clave); return correo; }
   async function salir() { if (fb) await fb.auth.signOut(fb.A); }
+  async function restablecer(correo) { await fb.auth.sendPasswordResetEmail(fb.A, correo); }
 
   function escuchar(col, alCambiar) {
     if (modo === "nube") {
@@ -79,13 +87,18 @@
     if (modo === "nube") { const { fs, F } = fb; await fs.setDoc(fs.doc(F, col, id), datos); return; }
     cache[col][id] = datos; await escribirIDB(col, id, datos); avisar(col);
   }
+  async function borrar(col, id) {
+    if (modo === "nube") { const { fs, F } = fb; await fs.deleteDoc(fs.doc(F, col, id)); return; }
+    delete cache[col][id]; await borrarIDB(col, id); avisar(col);
+  }
   async function subirImagen(blob) {   // el recorte viaja como data URL dentro del documento (nube y local)
     return await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(blob); });
   }
   function descargar(nombre, texto) {
     const url = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" }));
+    // (sin cambios) descarga directa en el navegador
     const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   }
-  window.Almacen = { iniciar, entrar, salir, escuchar, guardar, subirImagen, descargar, get modo() { return modo; } };
+  window.Almacen = { iniciar, entrar, salir, restablecer, escuchar, guardar, borrar, subirImagen, descargar, get modo() { return modo; } };
 })();

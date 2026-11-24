@@ -1,9 +1,10 @@
 /* Service worker: guarda la app y los modelos en el celular para usarla sin internet en el galpón.
  * Cambia VERSION cada vez que actualices los archivos o los modelos, para que los celulares descarguen la versión nueva. */
-const VERSION = "crestas-v2";
+const VERSION = "crestas-v4";
 const BASE = ["./", "index.html", "estilos.css", "app.js", "motor.js", "almacen.js", "config.js", "manifest.webmanifest",
   "iconos/icono-192.png", "iconos/icono-512.png",
-  "https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js"];
+  "https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {

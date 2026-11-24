@@ -19,13 +19,26 @@ Foto de la cresta ─► YOLO11s-seg ─► recorte de la cresta ─► clasific
 - **Umbral de alerta: 0,15.** Se calibró con el motor de este aplicativo en el conjunto de validación, para detectar al menos el 90 % de las gallinas enfermas (sensibilidad en validación: 94,4 %).
 - Resultados en el conjunto de prueba del dataset v1 (13 gallinas, 39 fotos): **PDC 76,9 %**, sensibilidad 83,3 %, especificidad 71,4 %.
 
-### Pestañas
-| Pestaña | Para qué sirve |
+### Pantallas (versión 3)
+En computadora el menú va a la izquierda. En el celular va abajo: Diagnósticos, Capturar, Alertas, Estadísticas y Cuenta (estado de los modelos, exportar y cerrar sesión).
+
+| Pantalla | Para qué sirve |
 |---|---|
-| **Inspeccionar** | El galponero toma la foto y recibe *Sana* o *Enferma*, con el tiempo de detección. Si sale enferma, se crea una alerta. |
-| **Alertas** | El veterinario ve la cresta y la ubicación de la gallina, y marca *Enfermedad confirmada* o *Falsa alarma*. |
-| **Evaluación** | Muestra de evaluación (100 gallinas): diagnóstico del veterinario, **pretest** (inspección visual cronometrada) y **postest** (5 fotos con el aplicativo). |
-| **Indicadores** | Calcula **TPD** y **PDC** (pretest y postest), sensibilidad y especificidad, y exporta la ficha de registro en CSV. |
+| **Iniciar sesión** | Correo y contraseña de Firebase, con un enlace *¿Olvidaste tu contraseña?* que envía el correo para restablecerla. |
+| **Diagnósticos** | Registro de todas las capturas, con indicadores (total, sanas, sospechosas y enfermas), búsqueda, filtros por estado y periodo, y paginación. Cada registro se puede ver, editar (código, galpón, revisión) o eliminar. |
+| **Capturar** | Para la foto se puede abrir la cámara o subir una imagen. Se muestran los 5 pasos reales del procesamiento: preparación de la imagen, segmentación con YOLO, recorte y medidas de color, redimensionamiento a 224 × 224 y clasificación con la CNN. Después aparecen el resultado y el tiempo de detección. |
+| **Alertas** | Gallinas *Sospechosas* o *Enfermas*. El veterinario confirma la enfermedad, eligiéndola de una lista, o marca *Falsa alarma*. Tiene dos pestañas: Pendientes y Revisadas. |
+| **Estadísticas** | Gráficos de tendencia por día, distribución por estado y comparación por galpón. Incluye las enfermedades confirmadas por el veterinario, la tasa de salud, el tiempo promedio de detección y la opción de exportar el reporte. |
+
+**Estados de la cresta** (probabilidad de enfermedad *p* que da el clasificador):
+
+| Estado | Rango | Qué pasa |
+|---|---|---|
+| Sana | *p* < 0,15 | Sin alerta |
+| Sospechosa | 0,15 ≤ *p* < 0,30 | Alerta al veterinario (confianza baja) |
+| Enferma | *p* ≥ 0,30 | Alerta al veterinario |
+
+*Sospechosa* cuenta como resultado **Enferma** (supera el umbral de alerta), así se conserva la clasificación binaria Sana / Enferma.
 
 ---
 
@@ -35,7 +48,7 @@ Foto de la cresta ─► YOLO11s-seg ─► recorte de la cresta ─► clasific
 |---|---|
 | `index.html` | Página principal |
 | `estilos.css` | Estilos (modo claro y oscuro, diseño para celular) |
-| `app.js` | Interfaz, flujo de inspección, alertas, evaluación e indicadores |
+| `app.js` | Interfaz: ingreso, diagnósticos, captura, alertas y estadísticas |
 | `motor.js` | Motor de diagnóstico: YOLO, recorte, medidas de color y clasificador (replica el notebook) |
 | `almacen.js` | Guardado de datos: Firebase (nube) o IndexedDB (modo local) |
 | `config.js` | Configuración de Firebase (opcional) |
@@ -98,7 +111,7 @@ Desde entonces, el aplicativo pide **correo y contraseña**, y todos los usuario
 ## 6. Actualizar el aplicativo o los modelos
 
 1. Reemplaza los archivos en GitHub. Para un modelo nuevo, reemplaza las carpetas `modelos/yolo` o `modelos/clf`.
-2. En `sw.js`, cambia `VERSION = "crestas-v1"` por `"crestas-v2"`, y así sucesivamente. Sin este cambio, los celulares que ya la instalaron seguirán usando la versión guardada.
+2. En `sw.js`, sube el número de `VERSION` (la versión actual es `"crestas-v4"`; la siguiente será `"crestas-v5"`, y así sucesivamente). Si no lo cambias, los celulares que ya instalaron la app seguirán usando la versión guardada.
 3. Si cambias el clasificador, **vuelve a calibrar el umbral** (`UMBRAL` al inicio de `app.js`) con el conjunto de validación.
 
 ---
