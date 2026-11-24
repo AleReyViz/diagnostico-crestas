@@ -5,7 +5,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function logueado()  { return request.auth != null; }
-    function esAdmin()   { return logueado() && request.auth.token.email == "luis.reyna.larc@gmail.com"; }
+    function esAdmin()   { return logueado() && request.auth.token.email == "CORREO_DE_LA_ADMINISTRADORA"; }
     function miPerfil()  { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
     function activo()    { return logueado() && exists(miPerfil()) && get(miPerfil()).data.activo == true; }
     function esVet()     { return esAdmin() || (activo() && get(miPerfil()).data.rol == "veterinario"); }

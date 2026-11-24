@@ -66,7 +66,9 @@ Los perfiles se guardan en la colección `usuarios` de Firestore, con los campos
 | `modelos/yolo/` | YOLO11s-seg convertido a TensorFlow.js (pesos en float16, ~20 MB) |
 | `modelos/clf/` | Clasificador híbrido convertido a TensorFlow.js (~9 MB) |
 | `sw.js`, `manifest.webmanifest`, `iconos/` | Instalación como app y uso sin internet |
-| `firestore.rules` | Reglas de seguridad de la base de datos |
+| `firestore.rules` | Reglas de seguridad de la base de datos (se publican a mano en Firebase) |
+| `firebase.json` | Configuración del sitio `crestavet-shilicorp` en Firebase Hosting |
+| `.github/workflows/publicar.yml` | Publicación automática: cada *Commit* en GitHub publica la app |
 
 **Tecnologías:** HTML, CSS y JavaScript sin frameworks · TensorFlow.js 4.22 · Firebase (Authentication y Cloud Firestore) · Progressive Web App.
 
@@ -83,47 +85,36 @@ Sin configurar Firebase, funciona en **modo local**: los datos quedan guardados 
 
 ---
 
-## 4. Publicarlo en internet (GitHub Pages, gratis)
+## 4. Dónde está publicada
 
-1. Crea una cuenta en [github.com](https://github.com).
-2. Crea un repositorio **público** con el botón **New**, por ejemplo `diagnostico-crestas`.
-3. En el repositorio, elige **Add file → Upload files** y arrastra **todo el contenido de esta carpeta**, incluidas las carpetas `modelos` e `iconos` y el archivo `.nojekyll`. Presiona **Commit changes**.
-   > En Windows, los archivos que empiezan con punto, como `.nojekyll`, pueden estar ocultos. Actívalos en *Vista → Mostrar → Elementos ocultos*.
-4. Ve a **Settings → Pages**. En *Source* elige **Deploy from a branch**, luego la rama **main** y la carpeta **/ (root)**. Presiona **Save**.
-5. En uno o dos minutos, tu aplicativo estará en
-   **`https://TU-USUARIO.github.io/diagnostico-crestas/`**
-6. Ábrelo en el celular. En Chrome, el menú **⋮ → Instalar aplicación** (o *Agregar a pantalla principal*) lo instala como app. Después de la primera carga, que descarga unos 29 MB de modelos, funciona **sin internet**.
+- **Dirección oficial:** **https://crestavet-shilicorp.web.app** (Firebase Hosting, gratis).
+- **Código:** repositorio de GitHub `AleReyViz/diagnostico-crestas`.
+- **Publicación automática:** cada vez que guardas un cambio en GitHub con *Commit changes*, GitHub Actions publica la app en Firebase en 1 o 2 minutos. El avance se ve en la pestaña **Actions**: check verde si se publicó, X roja si falló.
 
-**Otra opción sin GitHub:** [Netlify Drop](https://app.netlify.com/drop). Arrastra la carpeta completa y te da una dirección pública al instante.
+### Conexión GitHub → Firebase (solo una vez, ya hecha si Actions sale en verde)
+1. Con Node.js instalado, en una carpeta que tenga `firebase.json`, ejecuta `firebase login` y luego `firebase init hosting:github`. Autoriza a Firebase en GitHub e indica el repositorio `AleReyViz/diagnostico-crestas`. A las preguntas sobre *build script* y *PR merged* responde **n**.
+2. Eso crea en GitHub el secreto `FIREBASE_SERVICE_ACCOUNT_DIAGNOSTICO_CRESTAS`, que usa `publicar.yml`.
+3. Si `.github/workflows/publicar.yml` no está en el repositorio, créalo en GitHub con *Add file → Create new file* y pega su contenido.
 
 ---
 
-## 5. Compartir datos entre el galponero y el veterinario (Firebase, gratis)
+## 5. Firebase: usuarios y base de datos
 
-En modo local, cada celular guarda sus propios datos. Para que **las alertas del galponero le lleguen al veterinario**, conecta Firebase:
+- **Authentication:** el método *Correo electrónico/contraseña* está activado. En *Configuración → Dominios autorizados* debe estar `crestavet-shilicorp.web.app`.
+- **Firestore:** las colecciones son `usuarios` (perfiles y roles) e `inspecciones` (diagnósticos). Las reglas de `firestore.rules` se publican en *Firestore Database → Reglas → Publicar*. En ellas debe ir el correo de la administradora en lugar de `CORREO_DE_LA_ADMINISTRADORA`.
+- **Usuarios:** se crean desde la app, en la pantalla **Usuarios** del veterinario. No hace falta crearlos en la consola de Firebase.
 
-1. Entra a [console.firebase.google.com](https://console.firebase.google.com), elige **Agregar proyecto** y créalo. Google Analytics no es necesario.
-2. **Registra la app web:** en *Configuración del proyecto → Tus apps*, haz clic en el ícono `</>`. Copia el objeto `firebaseConfig` y pégalo en `config.js` así:
-   ```js
-   window.CONFIG_FIREBASE = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
-   ```
-3. **Usuarios:** en *Authentication → Método de acceso*, activa **Correo electrónico/contraseña**. Luego, en *Usuarios → Agregar usuario*, crea una cuenta para el veterinario y otra para cada galponero.
-4. **Dominio autorizado:** en *Authentication → Configuración → Dominios autorizados*, agrega `TU-USUARIO.github.io`.
-5. **Base de datos:** en *Firestore Database → Crear base de datos*, elige **modo de producción** y la región `southamerica-east1` (São Paulo). En la pestaña **Reglas**, reemplaza todo por el contenido de `firestore.rules` y presiona **Publicar**.
-6. Sube el `config.js` actualizado a GitHub.
-
-Desde entonces, el aplicativo pide **correo y contraseña**, y todos los usuarios ven las mismas inspecciones y alertas en tiempo real.
-
-> **Seguridad:** la `apiKey` de Firebase no es secreta. Puede estar en un sitio público, porque lo que protege los datos son las reglas de `firestore.rules`: solo los usuarios que tú creaste pueden leer y escribir.
-> **Costo:** el plan gratuito *Spark* alcanza de sobra para este proyecto. No se usa Firebase Storage, que exige un plan de pago: los recortes de cresta (~30 KB) se guardan dentro de cada registro.
+> **Seguridad:** la `apiKey` de `config.js` no es secreta. Puede estar en un sitio público, porque lo que protege los datos son las reglas de `firestore.rules`.
+> **Costo:** el plan gratuito *Spark* alcanza para el proyecto. Firebase Hosting gratuito permite unos 360 MB de descarga al día: los modelos (~29 MB) se descargan solo la primera vez en cada celular.
 
 ---
 
 ## 6. Actualizar el aplicativo o los modelos
 
-1. Reemplaza los archivos en GitHub. Para un modelo nuevo, reemplaza las carpetas `modelos/yolo` o `modelos/clf`.
-2. En `sw.js`, sube el número de `VERSION` (la versión actual es `"crestas-v5"`; la siguiente será `"crestas-v6"`, y así sucesivamente). Si no lo cambias, los celulares que ya instalaron la app seguirán usando la versión guardada.
-3. Si cambias el clasificador, **vuelve a calibrar el umbral** (`UMBRAL` al inicio de `app.js`) con el conjunto de validación.
+1. En GitHub, edita el archivo (ícono del lápiz) o súbelo con *Add file → Upload files*. Para un modelo nuevo, reemplaza las carpetas `modelos/yolo` o `modelos/clf`.
+2. En `sw.js`, sube el número de `VERSION` (la versión actual es `"crestas-v9"`; la siguiente será `"crestas-v10"`, y así sucesivamente). Si no lo cambias, los celulares que ya instalaron la app seguirán usando la versión guardada.
+3. Presiona **Commit changes**. La app se publica sola en unos minutos.
+4. Si cambias el clasificador, **vuelve a calibrar el umbral** (`UMBRAL` al inicio de `app.js`) con el conjunto de validación.
 
 ---
 

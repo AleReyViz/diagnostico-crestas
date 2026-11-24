@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34C08E"/>
+      <stop offset=".55" stop-color="#14A37A"/>
+      <stop offset="1" stop-color="#0B5E46"/>
+    </linearGradient>
+    <radialGradient id="brillo" cx=".28" cy=".2" r=".7">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pluma" x1="0" y1="0" x2=".6" y2="1">
+      <stop offset="0" stop-color="#CF7436"/>
+      <stop offset="1" stop-color="#9A4220"/>
+    </linearGradient>
+    <linearGradient id="cresta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1F6B12"/>
+      <stop offset="1" stop-color="#0E3F0B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#fondo)"/>
+  <rect width="512" height="512" fill="url(#brillo)"/>
+  <!-- marco de escaneo -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity=".95">
+    <path d="M112 176v-40a24 24 0 0 1 24-24h40"/>
+    <path d="M336 112h40a24 24 0 0 1 24 24v40"/>
+    <path d="M400 336v40a24 24 0 0 1-24 24h-40"/>
+    <path d="M176 400h-40a24 24 0 0 1-24-24v-40"/>
+  </g>
+  <!-- cresta (lóbulos redondeados) -->
+  <g fill="#E1252F">
+    <circle cx="206" cy="238" r="22"/>
+    <circle cx="232" cy="208" r="27"/>
+    <circle cx="266" cy="196" r="30"/>
+    <circle cx="300" cy="214" r="25"/>
+    <circle cx="318" cy="246" r="18"/>
+    <path d="M190 250 Q200 270 236 272 L300 272 Q330 266 334 246 L300 214 L232 208 Z"/>
+  </g>
+  <path d="M226 206 Q232 196 242 194 M262 190 Q268 182 278 184" stroke="#FF6B6F" stroke-width="7" stroke-linecap="round" fill="none" opacity=".85"/>
+  <!-- cabeza -->
+  <path d="M188 388 Q166 338 180 298 Q198 252 258 250 Q318 250 334 300 Q342 326 330 350 Q320 374 302 388 Q246 400 188 388 Z" fill="url(#pluma)"/>
+  <path d="M196 300 Q214 274 246 268" stroke="#E79A5E" stroke-width="8" stroke-linecap="round" fill="none" opacity=".8"/>
+  <circle cx="300" cy="322" r="11" fill="#F0857A" opacity=".75"/>
+  <!-- pico -->
+  <path d="M332 290 L372 306 L334 322 Z" fill="#F7A21B" stroke="#F7A21B" stroke-width="8" stroke-linejoin="round"/>
+  <!-- barbilla -->
+  <path d="M320 328 Q342 336 338 360 Q334 382 316 374 Q304 364 308 340 Z" fill="#E1252F"/>
+  <!-- ojo -->
+  <circle cx="290" cy="292" r="12" fill="#2A1408"/>
+  <circle cx="294" cy="288" r="4" fill="#FFFFFF"/>
+  <!-- línea de escaneo -->
+  <rect x="132" y="232" width="248" height="9" rx="4.5" fill="#F4FF9E" opacity=".95"/>
+</svg>

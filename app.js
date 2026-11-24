@@ -80,7 +80,7 @@ const IC = {
   escudo: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
 };
 const ic = (n, extra = "") => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${IC[n]}</svg>`;
-const LOGO = `<svg viewBox="6 7 29 27" aria-hidden="true"><path d="M9 29l1.5-11 4 6 2-13 4 11 3-13 3 12 4-7 1 15z" fill="currentColor"/><rect x="8" y="27.5" width="25" height="4.5" rx="2.2" fill="currentColor"/></svg>`;
+const LOGO = `<img src="iconos/icono-192.png" alt="" width="64" height="64">`;
 
 const chip = e => `<span class="chip f-${e.cls}">${ic(e.ico)}${e.txt}</span>`;
 const barraProb = p => { const e = estadoDe(p); return `<div class="prob"><div class="barra"><i style="width:${Math.round(p * 100)}%;background:var(--${e.cls === "sosp" ? "sosp" : e.cls === "enf" ? "enf" : "sana"})"></i></div><b>${Math.round(p * 100)}%</b></div>`; };
@@ -531,6 +531,7 @@ function vCuenta() {
   <div class="tarjeta" style="display:flex;flex-direction:column;gap:10px">
     <div class="estado-modelo" style="padding:0">${estadoModelo()}</div>
     <div class="usuario"><span class="muted">${S.nube ? esc(ROL_TXT[S.rol] || "") : "Modo local"}</span><b>${esc(nombreDe())}</b>${S.nube ? `<span class="small muted">${esc(S.usuario || "")}</span>` : ""}</div>
+    ${!instalada() && (avisoInstalar || esIOS()) ? `<button class="primario" data-acc="instalar">${ic("descargar")}Instalar CrestaVet</button>` : ""}
     ${esVet() ? `<button data-ir="usuarios">${ic("grupo")}Usuarios</button><button data-acc="exportar">${ic("descargar")}Exportar diagnósticos (CSV)</button>` : ""}
     ${S.nube ? `<button class="peligro" data-acc="salir">${ic("salir")}Cerrar sesión</button>` : ""}</div>`;
 }
@@ -574,6 +575,7 @@ document.addEventListener("click", async ev => {
     case "borrar-si": { const id = S.modal; try { await Almacen.borrar("inspecciones", id); delete S.ins[id]; toast("Diagnóstico eliminado"); } catch { toast("No se pudo eliminar."); }
       S.modal = null; S.confirmarBorrar = false; return render(); }
     case "exportar": return esVet() && exportar();
+    case "instalar": if (avisoInstalar) { avisoInstalar.prompt(); avisoInstalar = null; } else { localStorage.removeItem("crestas:instalar-despues"); ocultarInstalar(); mostrarInstalar("ios"); } return;
     case "nuevo-usuario": S.nuevoUsuario = true; render(); return $("#n-nombre")?.focus();
     case "cancelar-usuario": S.nuevoUsuario = false; return render();
     case "activar-admin": {
@@ -611,6 +613,34 @@ document.addEventListener("submit", async ev => {
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && S.modal) { S.modal = null; pintarModal(); } });
 window.addEventListener("hashchange", () => { const v = leerHash(); if (v && v !== S.vista) ir(v); });
+
+/* ===================== Instalar la app (PWA) ===================== */
+// Android/Chrome: el navegador avisa con "beforeinstallprompt" y mostramos nuestro botón "Instalar".
+// iPhone/Safari: no existe ese aviso, así que mostramos cómo agregarla a la pantalla de inicio.
+let avisoInstalar = null;
+const instalada = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const posponido = () => Date.now() < lsGet("instalar-despues", 0);
+function mostrarInstalar(modo) {
+  if (instalada() || posponido() || document.getElementById("instalar")) return;
+  const d = document.createElement("div"); d.id = "instalar"; d.className = "instalar"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Instalar CrestaVet");
+  d.innerHTML = `<img src="iconos/icono-192.png" alt="" width="48" height="48">
+    <div class="texto"><b>Instala CrestaVet</b><span>${modo === "ios"
+      ? `Toca <b>Compartir</b> <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg> y luego <b>Agregar a inicio</b>.`
+      : "Úsala como una app: desde tu pantalla de inicio y a pantalla completa."}</span></div>
+    <div class="botones">${modo === "ios" ? "" : `<button class="primario" data-inst="si">Instalar</button>`}<button class="fantasma" data-inst="no">${modo === "ios" ? "Entendido" : "Ahora no"}</button></div>`;
+  document.body.appendChild(d);
+}
+function ocultarInstalar() { document.getElementById("instalar")?.remove(); }
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); avisoInstalar = e; mostrarInstalar("android"); });
+window.addEventListener("appinstalled", () => { avisoInstalar = null; ocultarInstalar(); toast("CrestaVet quedó instalada en tu pantalla de inicio"); });
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-inst]"); if (!b) return;
+  if (b.dataset.inst === "si" && avisoInstalar) { avisoInstalar.prompt(); const r = await avisoInstalar.userChoice.catch(() => ({})); avisoInstalar = null; if (r.outcome !== "accepted") lsSet("instalar-despues", Date.now() + 3 * 864e5); }
+  else lsSet("instalar-despues", Date.now() + 3 * 864e5);
+  ocultarInstalar();
+});
+if (esIOS() && !instalada()) setTimeout(() => mostrarInstalar("ios"), 2500);
 
 /* ===================== Inicio ===================== */
 let conectado = false, modelosIniciados = false;
